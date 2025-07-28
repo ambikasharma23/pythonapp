@@ -1,0 +1,53 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.container {
+    max-width: 1000px;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+    font-weight: 600;
+}
+
+.form-text {
+    font-size: 0.85rem;
+}
+
+.alert {
+    margin-bottom: 1rem;
+}
+
+.progress {
+    height: 1.5rem;
+}
+
+.progress-bar {
+    font-size: 0.9rem;
+    line-height: 1.5rem;
+    background-color: #28a745;
+}
+
+#commandPreview {
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background-color: white;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+@media (max-width: 768px) {
+    .input-group > .btn {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+}
