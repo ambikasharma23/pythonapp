@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Command - Roambee Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .summary-modal .modal-body {
+            font-size: 1.1rem;
+            padding: 1.5rem;
+        }
+        .summary-item {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .summary-item strong {
+            margin-right: 15px;
+            font-weight: 600;
+            color: #495057;
+        }
+        .summary-item span {
+            color: #212529;
+            font-family: monospace;
+            font-size: 1.1rem;
+        }
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Send Command</h1>
+            <a href="/" class="btn btn-outline-secondary">Back to Home</a>
+        </div>
+        
+        <!-- Command Mode Selection -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Command Mode</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="commandMode" id="manualMode" value="manual" checked>
+                    <label class="form-check-label" for="manualMode">Manual Command</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="commandMode" id="templateMode" value="template">
+                    <label class="form-check-label" for="templateMode">Use Template</label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Manual Command Section -->
+        <div id="manualCommandSection" class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Manual Command Input</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="commandInput" class="form-label">AT Command</label>
+                    <input type="text" class="form-control" id="commandInput" placeholder="e.g., AT+TIMEGAP=0,900,1,900 & AT+SAMPLEMODE=0,0">
+                    <div class="form-text">Enter the full AT command you want to send</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Template Command Section -->
+        <div id="templateCommandSection" class="card mb-4" style="display: none;">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Command Template</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="deviceType" class="form-label">Device Type</label>
+                        <select class="form-select" id="deviceType">
+                            <option value="">Select device type</option>
+                            <option value="BSF/BSM">BSF/BSM</option>
+                            <option value="BeeLabel">BeeLabel</option>
+                            <option value="BAG 5G">BAG 5G</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="commandType" class="form-label">Command Type</label>
+                        <select class="form-select" id="commandType" disabled>
+                            <option value="">Select command type</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Template fields will be populated here -->
+                <div id="templateFields"></div>
+                
+                <!-- Command Preview -->
+                <div class="alert alert-info mt-3">
+                    <strong>Generated Command:</strong>
+                    <div id="commandPreview" class="mt-1">None</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-4">
+            <button id="sendCommandBtn" class="btn btn-primary btn-lg me-md-2">
+                <span id="sendSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                Send Commands
+            </button>
+            <a href="/" class="btn btn-outline-secondary btn-lg">Cancel</a>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progressSection" class="card" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Progress</h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="progressText" class="text-center">Preparing to send commands...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Modal -->
+    <div class="modal fade summary-modal" id="summaryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Command Sending Summary</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="summary-item">
+                        <strong>Total IMEIs:</strong>
+                        <span id="summaryTotal">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <strong>Successfully Sent:</strong>
+                        <span id="summarySuccess">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <strong>Failed to Send:</strong>
+                        <span id="summaryFailed">0</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button id="downloadReportBtn" type="button" class="btn btn-primary">Download Report</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const manualModeRadio = document.getElementById('manualMode');
+            const templateModeRadio = document.getElementById('templateMode');
+            const manualSection = document.getElementById('manualCommandSection');
+            const templateSection = document.getElementById('templateCommandSection');
+            const deviceTypeSelect = document.getElementById('deviceType');
+            const commandTypeSelect = document.getElementById('commandType');
+            const templateFieldsDiv = document.getElementById('templateFields');
+            const commandPreview = document.getElementById('commandPreview');
+            const sendCommandBtn = document.getElementById('sendCommandBtn');
+            const sendSpinner = document.getElementById('sendSpinner');
+            const progressSection = document.getElementById('progressSection');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const commandInput = document.getElementById('commandInput');
+            const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
+            const downloadReportBtn = document.getElementById('downloadReportBtn');
+            
+            let reportBlob = null;
+
+            // Command mode toggle
+            document.querySelectorAll('input[name="commandMode"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'manual') {
+                        manualSection.style.display = 'block';
+                        templateSection.style.display = 'none';
+                    } else {
+                        manualSection.style.display = 'none';
+                        templateSection.style.display = 'block';
+                        updateCommandPreview();
+                    }
+                });
+            });
+            
+            // Device type change
+            deviceTypeSelect.addEventListener('change', function() {
+                const deviceType = this.value;
+                commandTypeSelect.innerHTML = '<option value="">Select command type</option>';
+                commandTypeSelect.disabled = !deviceType;
+                
+                if (deviceType === 'BAG 5G') {
+                    commandTypeSelect.innerHTML += `
+                        <option value="PRF">PRF</option>
+                        <option value="LIGHT TRIGGER">Light Trigger</option>
+                        <option value="SENSOR">Sensor Configuration</option>
+                    `;
+                } else if (deviceType) {
+                    commandTypeSelect.innerHTML += `
+                        <option value="PRF">PRF</option>
+                        <option value="BLE">BLE Configuration</option>
+                        <option value="LIGHT TRIGGER">Light Trigger</option>
+                        <option value="SENSOR">Sensor Configuration</option>
+                    `;
+                }
+                
+                templateFieldsDiv.innerHTML = '';
+                updateCommandPreview();
+            });
+            
+            // Command type change
+            commandTypeSelect.addEventListener('change', function() {
+                const cmdType = this.value;
+                const deviceType = deviceTypeSelect.value;
+                templateFieldsDiv.innerHTML = '';
+                
+                if (!cmdType) {
+                    updateCommandPreview();
+                    return;
+                }
+                
+                if (cmdType === 'PRF') {
+                    templateFieldsDiv.innerHTML = `
+                        <div class="mb-3">
+                            <label for="cloudFreq" class="form-label">PRF (seconds)</label>
+                            <input type="number" class="form-control" id="cloudFreq" min="300">
+                            <div class="form-text">Minimum: ${getMinFrequency(deviceType)} seconds</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sensorFreq" class="form-label">Sensor/Sample Frequency (seconds)</label>
+                            <input type="number" class="form-control" id="sensorFreq" min="300">
+                            <div class="form-text">Must be = PRF or factor of it</div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('cloudFreq').addEventListener('input', updateCommandPreview);
+                    document.getElementById('sensorFreq').addEventListener('input', updateCommandPreview);
+                }
+                else if (cmdType === 'BLE') {
+                    templateFieldsDiv.innerHTML = `
+                        <div class="mb-3">
+                            <label for="bleMode" class="form-label">BLE Mode</label>
+                            <select class="form-select" id="bleMode">
+                                <option value="1">ON</option>
+                                <option value="0">OFF</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="bleTimeContainer">
+                            <label for="bleTime" class="form-label">BLE Scan Time (seconds)</label>
+                            <input type="number" class="form-control" id="bleTime" min="10" max="100" value="10">
+                            <div class="form-text">Minimum: 10 seconds, Maximum: 100 seconds</div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('bleMode').addEventListener('change', function() {
+                        document.getElementById('bleTimeContainer').style.display = 
+                            this.value === '1' ? 'block' : 'none';
+                        updateCommandPreview();
+                    });
+                    
+                    document.getElementById('bleTime').addEventListener('input', updateCommandPreview);
+                }
+                else if (cmdType === 'LIGHT TRIGGER') {
+                    templateFieldsDiv.innerHTML = `
+                        <div class="mb-3">
+                            <label for="lightMode" class="form-label">Light Trigger</label>
+                            <select class="form-select" id="lightMode">
+                                <option value="1">ON</option>
+                                <option value="0">OFF</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="lightGapContainer">
+                            <label for="lightGap" class="form-label">Time Gap (seconds) </label>
+                            <input type="number" class="form-control" id="lightGap" min="360" value="900">
+                            <div class="form-text">Minimum: 360 seconds (6 minutes)</div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('lightMode').addEventListener('change', function() {
+                        document.getElementById('lightGapContainer').style.display = 
+                            this.value === '1' ? 'block' : 'none';
+                        updateCommandPreview();
+                    });
+                    
+                    document.getElementById('lightGap').addEventListener('input', updateCommandPreview);
+                }
+                else if (cmdType === 'SENSOR') {
+                    templateFieldsDiv.innerHTML = `
+                        <div class="mb-3">
+                            <label class="form-label">Select Sensors</label>
+                            <select class="form-select" id="sensorSelect" multiple size="4">
+                                <option value="LIGHT">Light</option>
+                                <option value="TEMP">Temperature</option>
+                                ${deviceType !== 'BeeLabel' && deviceType !== 'BAG 5G' ? '<option value="HUM">Humidity</option>' : ''}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple</div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('sensorSelect').addEventListener('change', updateCommandPreview);
+                }
+                
+                updateCommandPreview();
+            });
+            
+            // Send command button
+            sendCommandBtn.addEventListener('click', function() {
+                let command;
+                
+                if (manualModeRadio.checked) {
+                    command = commandInput.value.trim();
+                    if (!command) {
+                        alert('Please enter a command');
+                        return;
+                    }
+                } else {
+                    command = generateCommandFromTemplate();
+                    if (!command) {
+                        alert('Please complete all required fields');
+                        return;
+                    }
+                }
+                
+                if (!confirm(`Are you sure you want to send this command to all devices?\n\n${command}`)) {
+                    return;
+                }
+                
+                // UI Updates
+                sendSpinner.classList.remove('d-none');
+                sendCommandBtn.disabled = true;
+                progressSection.style.display = 'block';
+                progressBar.style.width = '5%';
+                progressText.textContent = 'Starting command sending...';
+                
+                // API Call
+                fetch('/api/send_command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        command: command
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => {
+                            throw new Error(err.error || 'Failed to send command');
+                        });
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    reportBlob = blob;
+                    
+                    // Parse the Excel file to get summary data
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, {type: 'array'});
+                            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                            const excelData = XLSX.utils.sheet_to_json(firstSheet);
+                            resolve(excelData);
+                        };
+                        reader.readAsArrayBuffer(blob);
+                    });
+                })
+                .then(data => {
+                    // Calculate summary from the report data
+                    const summary = calculateSendSummary(data);
+                    
+                    // Update UI
+                    progressBar.style.width = '100%';
+                    progressText.textContent = 'Command sent successfully!';
+                    
+                    // Show summary modal
+                    document.getElementById('summaryTotal').textContent = summary.total;
+                    document.getElementById('summarySuccess').textContent = summary.success;
+                    document.getElementById('summaryFailed').textContent = summary.failed;
+                    summaryModal.show();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error: ' + error.message);
+                    progressText.textContent = 'Error sending command';
+                })
+                .finally(() => {
+                    sendSpinner.classList.add('d-none');
+                    sendCommandBtn.disabled = false;
+                    progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                });
+                
+                // Progress animation
+                const progressInterval = setInterval(() => {
+                    const currentWidth = parseInt(progressBar.style.width);
+                    if (currentWidth < 90) {
+                        const newWidth = Math.min(currentWidth + 5, 90);
+                        progressBar.style.width = `${newWidth}%`;
+                        progressText.textContent = `Sending commands... ${newWidth}%`;
+                    } else {
+                        clearInterval(progressInterval);
+                    }
+                }, 300);
+            });
+
+            function calculateSendSummary(data) {
+                let success = 0;
+                let failed = 0;
+                
+                data.forEach(row => {
+                    if (row.Status && (row.Status.toLowerCase().includes('success') || 
+                                       row.Status.toLowerCase().includes('acknowledged'))) {
+                        success++;
+                    } else {
+                        failed++;
+                    }
+                });
+                
+                return {
+                    total: data.length,
+                    success: success,
+                    failed: failed
+                };
+            }
+
+            downloadReportBtn.addEventListener('click', function() {
+                if (reportBlob) {
+                    const url = URL.createObjectURL(reportBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `command_results_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+                summaryModal.hide();
+            });
+
+            function getMinFrequency(deviceType) {
+                switch(deviceType) {
+                    case 'BSF/BSM': return 300;
+                    case 'BeeLabel': return 600;
+                    case 'BAG 5G': return 900;
+                    default: return 300;
+                }
+            }
+            
+            function updateCommandPreview() {
+                if (manualModeRadio.checked) {
+                    const cmd = commandInput.value.trim();
+                    commandPreview.textContent = cmd || 'None';
+                } else {
+                    commandPreview.textContent = generateCommandFromTemplate() || 'None';
+                }
+            }
+            
+            function generateCommandFromTemplate() {
+                const cmdType = commandTypeSelect.value;
+                const deviceType = deviceTypeSelect.value;
+                
+                if (!cmdType || !deviceType) return null;
+                
+                if (cmdType === 'PRF') {
+                    const cloudFreq = parseInt(document.getElementById('cloudFreq')?.value);
+                    const sensorFreq = parseInt(document.getElementById('sensorFreq')?.value);
+                    
+                    if (isNaN(cloudFreq) || isNaN(sensorFreq)) return null;
+                    
+                    const minFreq = getMinFrequency(deviceType);
+                    if (cloudFreq < minFreq || sensorFreq < minFreq) return null;
+                    
+                    if (cloudFreq < sensorFreq || (cloudFreq % sensorFreq !== 0 && cloudFreq != sensorFreq)) {
+                        return null;
+                    }
+                    
+                    const mode = cloudFreq === sensorFreq ? "0" : "1";
+                    return `AT+TIMEGAP=0,${cloudFreq},1,${sensorFreq} & AT+SAMPLEMODE=${mode},${mode}`;
+                }
+                else if (cmdType === 'BLE') {
+                    const mode = document.getElementById('bleMode')?.value;
+                    if (!mode) return null;
+                    
+                    if (mode === '0') {
+                        return 'AT+BTENABLE=0,10';
+                    }
+                    
+                    const time = document.getElementById('bleTime')?.value;
+                    if (!time || time < 10 || time > 100) return null;
+                    
+                    return `AT+BTENABLE=${mode},${time}`;
+                }
+                else if (cmdType === 'LIGHT TRIGGER') {
+                    const mode = document.getElementById('lightMode')?.value;
+                    if (!mode) return null;
+                    
+                    if (mode === '0') {
+                        return 'AT+LIGHT=0,500,900';
+                    }
+                    
+                    const gap = document.getElementById('lightGap')?.value;
+                    if (!gap || gap < 360) return null;
+                    
+                    return `AT+LIGHT=${mode},500,${gap}`;
+                }
+                else if (cmdType === 'SENSOR') {
+                    const select = document.getElementById('sensorSelect');
+                    if (!select) return 'None';
+                    
+                    const selected = Array.from(select.selectedOptions).map(opt => opt.value);
+                    if (selected.includes('None') || selected.length === 0) {
+                        return 'AT+SENSORMASK=0';
+                    }
+                    
+                    // Bit mask: [LIGHT, TEMP, HUM, 1, 1]
+                    const bits = [0, 0, 0, 1, 1];
+                    if (selected.includes('LIGHT')) bits[0] = 1;
+                    if (selected.includes('TEMP')) bits[1] = 1;
+                    if (selected.includes('HUM') && deviceType !== 'BeeLabel' && deviceType !== 'BAG 5G') bits[2] = 1;
+                    
+                    const decimalValue = parseInt(bits.reverse().join(''), 2);
+                    return `AT+SENSORMASK=${decimalValue}`;
+                }
+                
+                return null;
+            }
+        });
+    </script>
+</body>
+</html>

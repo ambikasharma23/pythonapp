@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roambee Command Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .disabled-link {
+            pointer-events: none;
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #uploadedFileInfo {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        #fileInfo .alert {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="text-center mb-4">
+            <h1>Roambee Command Tool</h1>
+            <p class="lead">Manage your Roambee devices efficiently</p>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Upload IMEI List</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="imeiFile" class="form-label">Select file (Excel or CSV)</label>
+                    <input class="form-control" type="file" id="imeiFile" accept=".xlsx,.xls,.csv">
+                    <div class="form-text">Ensure file has a column named "IMEI" </div>
+                </div>
+                <button id="uploadBtn" class="btn btn-primary">
+                    <span id="uploadSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    Upload
+                </button>
+                <div id="fileInfo" class="mt-3"></div>
+                <div id="uploadedFileInfo" class="d-none mt-3">
+                    <strong>Current uploaded file:</strong> <span id="currentFilename"></span>
+                    <button id="clearFileBtn" class="btn btn-sm btn-outline-danger ms-2">Clear</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Operations</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-3">
+                    <a href="/send_command" id="sendCommandBtn" class="btn btn-primary btn-lg disabled-link">Send Command</a>
+                    <a href="/check_status" id="checkStatusBtn" class="btn btn-primary btn-lg disabled-link">Check Command Status</a>
+                </div>
+                <div id="operationWarning" class="mt-3 text-danger d-none">
+                    Please upload an IMEI list file first before performing any operations.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadBtn = document.getElementById('uploadBtn');
+            const imeiFile = document.getElementById('imeiFile');
+            const fileInfo = document.getElementById('fileInfo');
+            const uploadSpinner = document.getElementById('uploadSpinner');
+            const sendCommandBtn = document.getElementById('sendCommandBtn');
+            const checkStatusBtn = document.getElementById('checkStatusBtn');
+            const operationWarning = document.getElementById('operationWarning');
+            const uploadedFileInfo = document.getElementById('uploadedFileInfo');
+            const currentFilename = document.getElementById('currentFilename');
+            const clearFileBtn = document.getElementById('clearFileBtn');
+            
+            let fileUploaded = {{ 'true' if has_imeis else 'false' }};
+            let uploadedFileName = '{{ filename }}' || '';
+            
+            function resetState() {
+                fileUploaded = false;
+                uploadedFileName = '';
+                uploadedFileInfo.classList.add('d-none');
+                sendCommandBtn.classList.add('disabled-link');
+                checkStatusBtn.classList.add('disabled-link');
+                operationWarning.classList.remove('d-none');
+            }
+            
+            function showAlert(message, type) {
+                fileInfo.innerHTML = `
+                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>`;
+            }
+
+            // Initialize based on server-side state
+            if (fileUploaded && uploadedFileName) {
+                uploadedFileInfo.classList.remove('d-none');
+                sendCommandBtn.classList.remove('disabled-link');
+                checkStatusBtn.classList.remove('disabled-link');
+                operationWarning.classList.add('d-none');
+                currentFilename.textContent = uploadedFileName;
+                
+                // Only show success message if this is a redirect after upload
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.has('uploaded')) {
+                    showAlert(`File uploaded successfully: ${uploadedFileName}`, 'success');
+                }
+            } else {
+                resetState();
+            }
+
+            uploadBtn.addEventListener('click', function() {
+                const file = imeiFile.files[0];
+                if (!file) {
+                    showAlert('Please select a file first', 'danger');
+                    return;
+                }
+                
+                uploadSpinner.classList.remove('d-none');
+                uploadBtn.disabled = true;
+                //fileInfo.innerHTML = '';
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => {
+                            throw new Error(err.error || 'Upload failed');
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    // Redirect to same page with success flag
+                    window.location.reload();
+                })
+                .catch(error => {
+                    console.error('Upload error:', error);
+                    showAlert(error.message, 'danger');
+                    uploadSpinner.classList.add('d-none');
+                    uploadBtn.disabled = false;
+                })
+                .finally(() => {
+                    uploadSpinner.classList.add('d-none');
+                    uploadBtn.disabled = false;
+                });
+            });
+            
+            clearFileBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (confirm('Are you sure you want to clear the uploaded IMEI list?')) {
+                    fetch('/clear_imeis', {
+                        method: 'POST'
+                    })
+                    .then(response => response.json())
+                    .then(() => {
+                        resetState();
+                        imeiFile.value = '';
+                        showAlert('Uploaded file has been cleared', 'info');
+                        // Remove the uploaded parameter from URL
+                        history.replaceState(null, '', window.location.pathname);
+                    })
+                    .catch(error => {
+                        console.error('Clear error:', error);
+                        showAlert('Failed to clear file', 'danger');
+                    });
+                }
+            });
+});
+    
+</script>
+</body>
+</html>

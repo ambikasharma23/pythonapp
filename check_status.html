@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Status - Roambee Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+       .summary-modal .modal-body {
+            font-size: 1.1rem;
+            padding: 1.5rem;
+        }
+        .summary-item {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .summary-item strong {
+            margin-right: 15px;
+            font-weight: 600;
+            color: #495057;
+        }
+        .summary-item span {
+            color: #212529;
+            font-family: monospace;
+            font-size: 1.1rem;
+        }
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Check Command Status</h1>
+            <a href="/" class="btn btn-outline-secondary">Back to Home</a>
+        </div>
+        
+        <!-- Date Range Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Date Range</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="startDate" class="form-label">Start Date</label>
+                        <div class="input-group">
+                            <input type="datetime-local" class="form-control" id="startDate">
+                            <button class="btn btn-outline-secondary" type="button" onclick="setDate(0, 'start')">Today</button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="setDate(-1, 'start')">-1 Day</button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="setDate(-7, 'start')">-7 Days</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="endDate" class="form-label">End Date</label>
+                        <div class="input-group">
+                            <input type="datetime-local" class="form-control" id="endDate">
+                            <button class="btn btn-outline-secondary" type="button" onclick="setDate(0, 'end')">Now</button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="setDate(1, 'end')">+1 Day</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Options Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Options</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="bulkCheck">
+                    <label class="form-check-label" for="bulkCheck">
+                        Check all commands (not just latest)
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-4">
+            <button id="checkStatusBtn" class="btn btn-primary btn-lg me-md-2">
+                <span id="checkSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                Check Status
+            </button>
+            <a href="/" class="btn btn-outline-secondary btn-lg">Cancel</a>
+        </div>
+        
+        <!-- Progress Section -->
+        <div id="progressSection" class="card" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Progress</h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="progressText" class="text-center">Preparing to check status...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Modal -->
+<div class="modal fade summary-modal" id="summaryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Command Status Summary</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="summary-item">
+                    <strong>Total IMEIs:</strong>
+                    <span id="summaryTotal">0</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Acknowledged:</strong>
+                    <span id="summaryAcknowledged">0</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Sent:</strong>
+                    <span id="summarySent">0</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Pending:</strong>
+                    <span id="summaryPending">0</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Errored:</strong>
+                    <span id="summaryErrored">0</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Not Found:</strong>
+                    <span id="summaryNotFound">0</span>
+                </div>
+                <div class="summary-item">
+                    <strong>Unknown State:</strong>
+                    <span id="summaryUnknown">0</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button id="downloadReportBtn" type="button" class="btn btn-primary">Download Report</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+// Helper function to format date for datetime-local input in local time
+function formatLocalDateTime(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Global function for button clicks
+function setDate(daysDelta, field) {
+    const date = new Date();
+    if (daysDelta !== 0) {
+        date.setDate(date.getDate() + daysDelta);
+    }
+    
+    if (field === 'start') {
+        date.setHours(0, 0, 0, 0); // Start of day (00:00)
+    } else {
+        if (daysDelta === 0) { // "Now" button
+            // Keep current time
+        } else { // Other end date options
+            date.setHours(23, 59, 0, 0); // End of day (23:59)
+        }
+    }
+    
+    document.getElementById(field + 'Date').value = formatLocalDateTime(date);
+}
+
+// Initialize dates when page loads
+function initializeDates() {
+    const now = new Date();
+    
+    // Start date (today at 00:00 local time)
+    const startDate = new Date(now);
+    startDate.setHours(0, 0, 0, 0);
+    document.getElementById('startDate').value = formatLocalDateTime(startDate);
+    
+    // End date (today at 23:59 local time)
+    const endDate = new Date(now);
+    endDate.setHours(23, 59, 0, 0);
+    document.getElementById('endDate').value = formatLocalDateTime(endDate);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize dates immediately
+    initializeDates();
+
+    const checkStatusBtn = document.getElementById('checkStatusBtn');
+    const checkSpinner = document.getElementById('checkSpinner');
+    const progressSection = document.getElementById('progressSection');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
+    const downloadReportBtn = document.getElementById('downloadReportBtn');
+    
+    let reportBlob = null; // To store the report for download after showing summary
+    let excelData = null;
+
+    checkStatusBtn.addEventListener('click', function() {
+        const startDateInput = document.getElementById('startDate').value;
+        const endDateInput = document.getElementById('endDate').value;
+        
+        if (!startDateInput || !endDateInput) {
+            alert('Please select both start and end dates');
+            return;
+        }
+        
+        const startDate = `${startDateInput.replace('T', ' ')}:00`;
+        const endDate = `${endDateInput.replace('T', ' ')}:00`;
+        
+        if (new Date(startDate) > new Date(endDate)) {
+            alert('Start date must be before end date');
+            return;
+        }
+        
+        if (!confirm('Check command status for the selected date range?')) {
+            return;
+        }
+        
+        checkSpinner.classList.remove('d-none');
+        checkStatusBtn.disabled = true;
+        progressSection.style.display = 'block';
+        progressBar.style.width = '5%';
+        progressText.textContent = 'Starting status check...';
+        
+        const bulkCheck = document.getElementById('bulkCheck').checked;
+        
+        // First get the Excel report
+        fetch('/api/check_status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        start_date: startDate,
+                        end_date: endDate,
+                        bulk_check: bulkCheck
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(err => {
+                            throw new Error(err || 'Status check failed');
+                        });
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    reportBlob = blob;
+                    
+                    // Parse the Excel file to get accurate counts
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, {type: 'array'});
+                            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                            excelData = XLSX.utils.sheet_to_json(firstSheet);
+                            resolve();
+                        };
+                        reader.readAsArrayBuffer(blob);
+                    });
+                })
+                .then(() => {
+                    // Calculate accurate summary from the actual data
+                    const summary = calculateSummary(excelData);
+                    
+                    updateSummaryModal(summary);
+                    progressBar.style.width = '100%';
+                    progressText.textContent = 'Status check complete!';
+                    summaryModal.show();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error: ' + error.message);
+                    progressText.textContent = 'Error checking status';
+                })
+                .finally(() => {
+                    checkSpinner.classList.add('d-none');
+                    checkStatusBtn.disabled = false;
+                    progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                });
+
+                // Progress animation
+                const progressInterval = setInterval(() => {
+                    const currentWidth = parseInt(progressBar.style.width);
+                    if (currentWidth < 90) {
+                        progressBar.style.width = `${currentWidth + 5}%`;
+                        progressText.textContent = `Processing... ${currentWidth + 5}%`;
+                    } else {
+                        clearInterval(progressInterval);
+                    }
+                }, 300);
+            });
+
+            function calculateSummary(data) {
+                const summary = {
+                    total: 0,
+                    acknowledged: 0,
+                    sent: 0,
+                    pending: 0,
+                    errored: 0,
+                    not_found: 0,
+                    unknown: 0
+                };
+
+                // Count unique IMEIs
+                const uniqueIMEIs = new Set();
+                
+                data.forEach(row => {
+                    if (row.IMEI) uniqueIMEIs.add(row.IMEI);
+                    
+                    // Count statuses
+                    const status = (row.Status || '').toLowerCase();
+                    if (status.includes('acknowledged')) summary.acknowledged++;
+                    else if (status.includes('sent')) summary.sent++;
+                    else if (status.includes('pending')) summary.pending++;
+                    else if (status.includes('error') || status.includes('errored')) summary.errored++;
+                    else if (status.includes('not found') || status.includes('na')) summary.not_found++;
+                    else if (status.includes('unknown state') || status.includes('unknown')) summary.unknown++;
+                });
+
+                summary.total = uniqueIMEIs.size;
+                return summary;
+            }
+
+            function updateSummaryModal(summary) {
+                document.getElementById('summaryTotal').textContent = summary.total;
+                document.getElementById('summaryAcknowledged').textContent = summary.acknowledged;
+                document.getElementById('summarySent').textContent = summary.sent;
+                document.getElementById('summaryPending').textContent = summary.pending;
+                document.getElementById('summaryErrored').textContent = summary.errored;
+                document.getElementById('summaryNotFound').textContent = summary.not_found;
+                document.getElementById('summaryUnknown').textContent = summary.unknown;
+            }
+
+            downloadReportBtn.addEventListener('click', function() {
+                if (reportBlob) {
+                    const url = URL.createObjectURL(reportBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `status_report_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }
+                summaryModal.hide();
+            });
+        });
+    </script>
+</body>
+</html>
